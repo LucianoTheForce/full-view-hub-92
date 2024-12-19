@@ -16,6 +16,7 @@ const Display = () => {
   useEffect(() => {
     const loadScreenContent = async () => {
       try {
+        // Carregar conteúdo inicial do localStorage
         const screens = JSON.parse(localStorage.getItem('screens') || '[]');
         const currentScreen = screens.find((s: any) => s.id === screenId);
         console.log('Loading initial content for screen:', screenId, currentScreen);
@@ -23,6 +24,7 @@ const Display = () => {
           setContent(currentScreen.currentContent);
         }
 
+        // Inscrever no canal do Supabase para atualizações em tempo real
         const channel = supabase.channel(`screen_${screenId}`)
           .on('broadcast', { event: 'content_update' }, (payload) => {
             console.log('Received broadcast update:', payload);
@@ -44,7 +46,7 @@ const Display = () => {
     };
 
     loadScreenContent();
-    document.title = `Tela ${screenId?.replace('screen', '')}`;
+    document.title = `Tela ${screenId}`;
   }, [screenId]);
 
   if (!content) {
