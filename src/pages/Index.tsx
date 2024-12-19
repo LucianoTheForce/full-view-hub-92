@@ -36,6 +36,7 @@ const Index = () => {
   const { mediaItems, loadMediaItems } = useMediaItems();
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const { saveSession } = useSessions();
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const { 
     slideshowEnabled, 
     setSlideshowEnabled,
@@ -59,7 +60,8 @@ const Index = () => {
         file_path: `ai-generated/ai-image-${Date.now()}.webp`,
         file_size: 0,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        is_slideshow: false
       };
       handleMediaDrop(mediaItem, selectedScreen.id);
     }
@@ -68,16 +70,19 @@ const Index = () => {
   const handleLoadSession = (session: Session) => {
     resetScreens(session.screens);
     loadSlideshowSettings(session);
+    setSelectedSession(session);
     toast.success("Sessão carregada com sucesso!");
   };
 
   const handleSaveSession = async (name: string) => {
-    await saveSession(name, screens, mediaItems);
+    const session = await saveSession(name, screens, mediaItems);
+    setSelectedSession(session);
     toast.success("Sessão salva com sucesso!");
   };
 
   const handleNewSession = () => {
     resetScreens([]);
+    setSelectedSession(null);
     toast.success("Nova sessão iniciada!");
   };
 

@@ -9,6 +9,8 @@ export interface Session {
   screens: any[];
   mediaItems: any[];
   createdAt: string;
+  slideshow_enabled?: boolean;
+  slideshow_interval?: number;
 }
 
 type SessionRow = Database['public']['Tables']['sessions']['Row'];
@@ -19,6 +21,8 @@ const mapSessionRowToSession = (row: SessionRow): Session => ({
   screens: row.screens as any[],
   mediaItems: row.media_items as any[],
   createdAt: row.created_at,
+  slideshow_enabled: row.slideshow_enabled,
+  slideshow_interval: row.slideshow_interval,
 });
 
 export const useSessions = () => {
