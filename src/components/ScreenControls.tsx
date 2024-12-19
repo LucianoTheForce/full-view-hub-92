@@ -63,7 +63,8 @@ export const ScreenControls: React.FC<ScreenControlsProps> = ({
     });
   };
 
-  const scalePercentage = Math.round(((selectedScreen.currentContent?.scale || 1) - 0.5) * 200);
+  // Calculate scale percentage (now up to 5000%)
+  const scalePercentage = Math.round(((selectedScreen.currentContent?.scale || 1) - 0.5) * 10000);
 
   return (
     <Card className="p-4 space-y-6">
@@ -114,7 +115,7 @@ export const ScreenControls: React.FC<ScreenControlsProps> = ({
         <Slider
           defaultValue={[selectedScreen.currentContent?.scale || 1]}
           min={0.5}
-          max={2}
+          max={50} // Aumentado para permitir 5000% de zoom
           step={0.1}
           onValueChange={handleScaleChange}
         />
