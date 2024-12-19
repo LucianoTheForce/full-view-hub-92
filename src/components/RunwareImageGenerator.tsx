@@ -12,11 +12,15 @@ import { RunwareGeneratedImages } from "./runware/RunwareGeneratedImages";
 interface RunwareImageGeneratorProps {
   onImageGenerated: (imageUrl: string) => void;
   onImageSaved?: () => void;
+  slideshowEnabled?: boolean;
+  slideshowInterval?: number;
 }
 
 export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
   onImageGenerated,
   onImageSaved,
+  slideshowEnabled = false,
+  slideshowInterval = 5000,
 }) => {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -70,13 +74,50 @@ export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
       console.log("Generated images result:", result);
       
       setGeneratedImages(result);
-      result.forEach((image: GeneratedImage) => {
-        if (image.imageURL) {
-          onImageGenerated(image.imageURL);
-        }
-      });
       
-      toast.success(`${result.length} ${result.length === 1 ? 'imagem gerada' : 'imagens geradas'} com sucesso!`);
+      // Handle slideshow generation if enabled
+      if (slideshowEnabled) {
+        for (const image of result) {
+          if (image.imageURL) {
+            // Save image with slideshow flag
+            const response = await fetch(image.imageURL);
+            const blob = await response.blob();
+            const file = new File([blob], `ai-image-${Date.now()}.webp`, { type: 'image/webp' });
+            
+            const filePath = `ai-generated/${file.name}`;
+            const { error: uploadError } = await supabase.storage
+              .from('media')
+              .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { error: insertError } = await supabase
+              .from('media_items')
+              .insert({
+                title: "Imagem Gerada por IA (Slideshow)",
+                type: "image",
+                file_path: filePath,
+                file_size: file.size,
+                is_slideshow: true,
+              });
+
+            if (insertError) throw insertError;
+          }
+        }
+        
+        if (onImageSaved) {
+          onImageSaved();
+        }
+        
+        toast.success(`${result.length} imagens geradas e salvas para slideshow!`);
+      } else {
+        result.forEach((image: GeneratedImage) => {
+          if (image.imageURL) {
+            onImageGenerated(image.imageURL);
+          }
+        });
+        toast.success(`${result.length} ${result.length === 1 ? 'imagem gerada' : 'imagens geradas'} com sucesso!`);
+      }
     } catch (error) {
       console.error("Erro ao gerar imagem:", error);
       toast.error("Erro ao gerar imagem. Tente novamente.");

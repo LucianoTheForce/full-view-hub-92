@@ -15,6 +15,7 @@ export type Database = {
           file_path: string
           file_size: number
           id: string
+          is_slideshow: boolean | null
           title: string
           type: string
           updated_at: string | null
@@ -24,6 +25,7 @@ export type Database = {
           file_path: string
           file_size: number
           id?: string
+          is_slideshow?: boolean | null
           title: string
           type: string
           updated_at?: string | null
@@ -33,6 +35,7 @@ export type Database = {
           file_path?: string
           file_size?: number
           id?: string
+          is_slideshow?: boolean | null
           title?: string
           type?: string
           updated_at?: string | null
@@ -46,6 +49,8 @@ export type Database = {
           media_items: Json
           name: string
           screens: Json
+          slideshow_enabled: boolean | null
+          slideshow_interval: number | null
         }
         Insert: {
           created_at?: string
@@ -53,6 +58,8 @@ export type Database = {
           media_items: Json
           name: string
           screens: Json
+          slideshow_enabled?: boolean | null
+          slideshow_interval?: number | null
         }
         Update: {
           created_at?: string
@@ -60,6 +67,8 @@ export type Database = {
           media_items?: Json
           name?: string
           screens?: Json
+          slideshow_enabled?: boolean | null
+          slideshow_interval?: number | null
         }
         Relationships: []
       }

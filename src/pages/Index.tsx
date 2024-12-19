@@ -10,6 +10,9 @@ import { useScreens } from "@/hooks/useScreens";
 import { useMediaItems } from "@/hooks/useMediaItems";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { useSlideshow } from "@/hooks/useSlideshow";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import type { Database } from "@/integrations/supabase/types";
 import type { Session } from "@/hooks/useSessions";
 import { useSessions } from "@/hooks/useSessions";
@@ -33,6 +36,14 @@ const Index = () => {
   const { mediaItems, loadMediaItems } = useMediaItems();
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const { saveSession } = useSessions();
+  const { 
+    slideshowEnabled, 
+    setSlideshowEnabled,
+    slideshowInterval,
+    setSlideshowInterval,
+    updateSlideshowSettings,
+    loadSlideshowSettings
+  } = useSlideshow();
 
   const handleImageGenerated = (imageUrl: string) => {
     setGeneratedImages((prev) => [...prev, imageUrl]);
@@ -56,6 +67,7 @@ const Index = () => {
 
   const handleLoadSession = (session: Session) => {
     resetScreens(session.screens);
+    loadSlideshowSettings(session);
     toast.success("Sessão carregada com sucesso!");
   };
 
@@ -67,6 +79,24 @@ const Index = () => {
   const handleNewSession = () => {
     resetScreens([]);
     toast.success("Nova sessão iniciada!");
+  };
+
+  const handleSlideshowToggle = async (checked: boolean) => {
+    setSlideshowEnabled(checked);
+    if (selectedSession) {
+      await updateSlideshowSettings(selectedSession.id, checked, slideshowInterval);
+      toast.success(checked ? "Slideshow ativado!" : "Slideshow desativado!");
+    }
+  };
+
+  const handleIntervalChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(event.target.value);
+    if (!isNaN(value) && value >= 1000) {
+      setSlideshowInterval(value);
+      if (selectedSession) {
+        await updateSlideshowSettings(selectedSession.id, slideshowEnabled, value);
+      }
+    }
   };
 
   return (
@@ -101,9 +131,35 @@ const Index = () => {
             </div>
             <div className="bg-white rounded-lg shadow-sm p-4">
               <RunwareImageGenerator 
-                onImageGenerated={handleImageGenerated} 
+                onImageGenerated={handleImageGenerated}
                 onImageSaved={loadMediaItems}
+                slideshowEnabled={slideshowEnabled}
+                slideshowInterval={slideshowInterval}
               />
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Slideshow</label>
+                  <Switch
+                    checked={slideshowEnabled}
+                    onCheckedChange={handleSlideshowToggle}
+                  />
+                </div>
+                {slideshowEnabled && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Intervalo (ms)
+                    </label>
+                    <Input
+                      type="number"
+                      min="1000"
+                      step="1000"
+                      value={slideshowInterval}
+                      onChange={handleIntervalChange}
+                      className="w-full"
+                    />
+                  </div>
+                )}
+              </div>
               <ImageSlider images={generatedImages} onSelect={handleGeneratedImageSelect} />
             </div>
           </div>
