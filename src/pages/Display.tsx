@@ -11,52 +11,47 @@ interface ScreenContent {
   backgroundColor?: string;
 }
 
+interface Screen {
+  id: string;
+  name: string;
+  isActive: boolean;
+  currentContent?: ScreenContent;
+}
+
 const Display = () => {
   const { screenId } = useParams();
-  const [content, setContent] = useState<ScreenContent | null>(null);
+  const [content, setContent] = useState<ScreenContent | null>(() => {
+    // Initialize content from localStorage during state initialization
+    try {
+      const screens = JSON.parse(localStorage.getItem('screens') || '[]') as Screen[];
+      const currentScreen = screens.find(s => s.id === screenId);
+      console.log('Initial load - Found screen:', currentScreen);
+      return currentScreen?.currentContent || null;
+    } catch (error) {
+      console.error('Error loading initial content:', error);
+      return null;
+    }
+  });
 
   useEffect(() => {
-    // Função para carregar o conteúdo do localStorage
-    const loadInitialContent = () => {
-      try {
-        const screens = JSON.parse(localStorage.getItem('screens') || '[]');
-        const currentScreen = screens.find((s: any) => s.id === screenId);
-        console.log('Initial screen content:', currentScreen);
-        
-        if (currentScreen?.currentContent) {
-          console.log('Setting initial content:', currentScreen.currentContent);
-          setContent(currentScreen.currentContent);
+    // Setup realtime channel for updates
+    console.log('Setting up realtime channel for screen:', screenId);
+    const channel = supabase.channel(`screen_${screenId}`)
+      .on('broadcast', { event: 'content_update' }, (payload) => {
+        console.log('Received broadcast update:', payload);
+        if (payload.payload?.screenId === screenId && payload.payload?.content) {
+          console.log('Updating content from broadcast:', payload.payload.content);
+          setContent(payload.payload.content);
         }
-      } catch (error) {
-        console.error('Error loading initial content:', error);
-      }
-    };
+      })
+      .subscribe((status) => {
+        console.log(`Subscription status for screen ${screenId}:`, status);
+      });
 
-    // Função para configurar o canal de tempo real
-    const setupRealtimeChannel = () => {
-      const channel = supabase.channel(`screen_${screenId}`)
-        .on('broadcast', { event: 'content_update' }, (payload) => {
-          console.log('Received broadcast update:', payload);
-          if (payload.payload?.screenId === screenId && payload.payload?.content) {
-            console.log('Updating content from broadcast:', payload.payload.content);
-            setContent(payload.payload.content);
-          }
-        })
-        .subscribe((status) => {
-          console.log(`Subscription status for screen ${screenId}:`, status);
-        });
-
-      return channel;
-    };
-
-    // Carregar conteúdo inicial e configurar canal
-    loadInitialContent();
-    const channel = setupRealtimeChannel();
-
-    // Atualizar título da página
+    // Update page title
     document.title = `Tela ${screenId}`;
 
-    // Cleanup
+    // Cleanup subscription
     return () => {
       console.log('Cleaning up subscription');
       supabase.removeChannel(channel);
@@ -72,7 +67,7 @@ const Display = () => {
     );
   }
 
-  // Estilos para o conteúdo
+  // Content styles
   const contentStyle = {
     transform: `rotate(${content.rotation || 0}deg) scale(${content.scale || 1})`,
     transition: 'transform 0.3s ease-in-out',
@@ -85,7 +80,7 @@ const Display = () => {
     >
       {content.type === "video" ? (
         <video
-          key={content.url} // Força o recarregamento do vídeo quando a URL muda
+          key={content.url}
           src={content.url}
           className="w-full h-full object-contain"
           style={contentStyle}
@@ -97,7 +92,7 @@ const Display = () => {
         />
       ) : (
         <img 
-          key={content.url} // Força o recarregamento da imagem quando a URL muda
+          key={content.url}
           src={content.url} 
           alt={content.title} 
           className="w-full h-full object-contain"
