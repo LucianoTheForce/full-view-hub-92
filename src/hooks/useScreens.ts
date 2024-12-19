@@ -21,12 +21,10 @@ interface Screen {
 }
 
 export const useScreens = () => {
-  // Carrega o estado inicial do localStorage, convertendo IDs para números simples
   const initialScreens = () => {
     const saved = localStorage.getItem('screens');
     if (!saved) return [];
     const parsedScreens = JSON.parse(saved);
-    // Converte os IDs existentes para números sequenciais
     return parsedScreens.map((screen: Screen, index: number) => ({
       ...screen,
       id: String(index + 1)
@@ -36,7 +34,41 @@ export const useScreens = () => {
   const [screens, setScreens] = useState<Screen[]>(initialScreens);
   const [selectedScreen, setSelectedScreen] = useState<Screen | null>(null);
 
-  // Persiste as mudanças no localStorage sempre que screens mudar
+  // Configurar canais do Supabase para cada tela
+  useEffect(() => {
+    const channels = screens.map(screen => {
+      const channel = supabase.channel(`screen_${screen.id}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      });
+
+      channel
+        .on('broadcast', { event: 'request_content' }, (payload) => {
+          console.log('Recebida solicitação de conteúdo:', payload);
+          if (payload.payload?.screenId === screen.id) {
+            // Enviar conteúdo atual
+            channel.send({
+              type: 'broadcast',
+              event: 'content_update',
+              payload: {
+                screenId: screen.id,
+                content: screen.currentContent
+              }
+            });
+          }
+        })
+        .subscribe();
+
+      return channel;
+    });
+
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
+  }, [screens]);
+
+  // Persiste as mudanças no localStorage
   useEffect(() => {
     localStorage.setItem('screens', JSON.stringify(screens));
   }, [screens]);
@@ -68,7 +100,6 @@ export const useScreens = () => {
 
     setScreens(updatedScreens);
 
-    // Update selected screen if it's the one being modified
     if (selectedScreen?.id === screenId) {
       setSelectedScreen(prev => {
         if (!prev) return null;
@@ -90,7 +121,7 @@ export const useScreens = () => {
       });
     }
 
-    // Broadcast the update to the display page
+    // Broadcast da atualização
     const channel = supabase.channel(`screen_${screenId}`);
     channel.subscribe().send({
       type: "broadcast",

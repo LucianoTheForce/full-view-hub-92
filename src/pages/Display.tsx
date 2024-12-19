@@ -20,101 +20,92 @@ interface Screen {
 
 const Display = () => {
   const { screenId } = useParams();
-  const [content, setContent] = useState<ScreenContent | null>(() => {
-    try {
-      // Tentar carregar do localStorage
-      const savedScreens = window.localStorage.getItem('screens');
-      console.log('Tentando carregar do localStorage:', { savedScreens, screenId });
-      
-      if (!savedScreens) {
-        console.log('Nenhuma tela encontrada no localStorage');
-        return null;
-      }
-
-      let screens: Screen[];
-      try {
-        screens = JSON.parse(savedScreens);
-        console.log('Telas parseadas:', screens);
-      } catch (parseError) {
-        console.error('Erro ao fazer parse das telas:', parseError);
-        return null;
-      }
-
-      if (!Array.isArray(screens)) {
-        console.error('Dados inválidos no localStorage - não é um array');
-        return null;
-      }
-
-      const currentScreen = screens.find(s => String(s.id) === String(screenId));
-      console.log('Tela encontrada:', currentScreen);
-
-      if (!currentScreen) {
-        console.log(`Nenhuma tela encontrada com ID ${screenId}`);
-        return null;
-      }
-
-      if (!currentScreen.currentContent) {
-        console.log('Tela encontrada mas sem conteúdo');
-        return null;
-      }
-
-      console.log('Conteúdo encontrado:', currentScreen.currentContent);
-      return currentScreen.currentContent;
-    } catch (error) {
-      console.error('Erro ao carregar conteúdo inicial:', error);
-      return null;
-    }
-  });
+  const [content, setContent] = useState<ScreenContent | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Configurando canal em tempo real para tela:', screenId);
+    console.log('Iniciando configuração para tela:', screenId);
     
-    const channel = supabase.channel(`screen_${screenId}`)
+    // Função para tentar carregar o conteúdo inicial
+    const loadInitialContent = () => {
+      try {
+        const savedScreens = window.localStorage.getItem('screens');
+        console.log('Dados do localStorage:', { savedScreens, screenId });
+        
+        if (savedScreens) {
+          const screens = JSON.parse(savedScreens) as Screen[];
+          const currentScreen = screens.find(s => String(s.id) === String(screenId));
+          
+          if (currentScreen?.currentContent) {
+            console.log('Conteúdo encontrado:', currentScreen.currentContent);
+            setContent(currentScreen.currentContent);
+            return true;
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('Erro ao carregar conteúdo:', error);
+        return false;
+      }
+    };
+
+    // Configurar canal do Supabase
+    const channel = supabase.channel(`screen_${screenId}`, {
+      config: {
+        broadcast: { self: true }
+      }
+    });
+
+    // Inscrever no canal
+    channel
       .on('broadcast', { event: 'content_update' }, (payload) => {
         console.log('Recebido broadcast:', payload);
         if (payload.payload?.screenId === screenId && payload.payload?.content) {
-          console.log('Atualizando conteúdo do broadcast:', payload.payload.content);
+          console.log('Atualizando conteúdo:', payload.payload.content);
           setContent(payload.payload.content);
+          setIsLoading(false);
         }
       })
-      .subscribe((status) => {
-        console.log(`Status da inscrição para tela ${screenId}:`, status);
-      });
-
-    // Tentar recarregar do localStorage periodicamente se não houver conteúdo
-    let retryInterval: number | null = null;
-    if (!content) {
-      retryInterval = window.setInterval(() => {
-        const savedScreens = window.localStorage.getItem('screens');
-        if (savedScreens) {
-          try {
-            const screens = JSON.parse(savedScreens);
-            const currentScreen = screens.find(s => String(s.id) === String(screenId));
-            if (currentScreen?.currentContent) {
-              console.log('Conteúdo encontrado em retry:', currentScreen.currentContent);
-              setContent(currentScreen.currentContent);
-              if (retryInterval) window.clearInterval(retryInterval);
-            }
-          } catch (error) {
-            console.error('Erro ao tentar recarregar:', error);
+      .subscribe(async (status) => {
+        console.log('Status da inscrição:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          // Tentar carregar conteúdo inicial
+          const loaded = loadInitialContent();
+          if (loaded) {
+            setIsLoading(false);
           }
+
+          // Solicitar conteúdo atual
+          channel.send({
+            type: 'broadcast',
+            event: 'request_content',
+            payload: { screenId }
+          });
         }
-      }, 1000);
-    }
+      });
 
     document.title = `Tela ${screenId}`;
 
+    // Limpar recursos
     return () => {
       console.log('Limpando recursos...');
       supabase.removeChannel(channel);
-      if (retryInterval) window.clearInterval(retryInterval);
     };
-  }, [screenId, content]);
+  }, [screenId]);
+
+  if (isLoading && !content) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center bg-black">
+        <div className="animate-pulse text-white">Carregando...</div>
+      </div>
+    );
+  }
 
   if (!content) {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-black">
-        <div className="animate-pulse text-white">Carregando...</div>
+        <div className="text-white">Aguardando conteúdo...</div>
       </div>
     );
   }
