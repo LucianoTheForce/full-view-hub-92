@@ -2,53 +2,68 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+interface ScreenContent {
+  type: "video" | "image";
+  url: string;
+  title: string;
+  rotation?: number;
+  scale?: number;
+  backgroundColor?: string;
+}
+
 const Display = () => {
   const { screenId } = useParams();
-  const [content, setContent] = useState<{
-    type: "video" | "image";
-    url: string;
-    title: string;
-    rotation?: number;
-    scale?: number;
-    backgroundColor?: string;
-  } | null>(null);
+  const [content, setContent] = useState<ScreenContent | null>(null);
 
   useEffect(() => {
-    const loadScreenContent = async () => {
+    // Função para carregar o conteúdo do localStorage
+    const loadInitialContent = () => {
       try {
-        // Carregar conteúdo inicial do localStorage
         const screens = JSON.parse(localStorage.getItem('screens') || '[]');
         const currentScreen = screens.find((s: any) => s.id === screenId);
-        console.log('Loading initial content for screen:', screenId, currentScreen);
+        console.log('Initial screen content:', currentScreen);
+        
         if (currentScreen?.currentContent) {
+          console.log('Setting initial content:', currentScreen.currentContent);
           setContent(currentScreen.currentContent);
         }
-
-        // Inscrever no canal do Supabase para atualizações em tempo real
-        const channel = supabase.channel(`screen_${screenId}`)
-          .on('broadcast', { event: 'content_update' }, (payload) => {
-            console.log('Received broadcast update:', payload);
-            if (payload.payload?.screenId === screenId && payload.payload?.content) {
-              setContent(payload.payload.content);
-            }
-          })
-          .subscribe((status) => {
-            console.log(`Subscription status for screen ${screenId}:`, status);
-          });
-
-        return () => {
-          console.log(`Unsubscribing from screen ${screenId}`);
-          channel.unsubscribe();
-        };
       } catch (error) {
-        console.error('Error in loadScreenContent:', error);
+        console.error('Error loading initial content:', error);
       }
     };
 
-    loadScreenContent();
+    // Função para configurar o canal de tempo real
+    const setupRealtimeChannel = () => {
+      const channel = supabase.channel(`screen_${screenId}`)
+        .on('broadcast', { event: 'content_update' }, (payload) => {
+          console.log('Received broadcast update:', payload);
+          if (payload.payload?.screenId === screenId && payload.payload?.content) {
+            console.log('Updating content from broadcast:', payload.payload.content);
+            setContent(payload.payload.content);
+          }
+        })
+        .subscribe((status) => {
+          console.log(`Subscription status for screen ${screenId}:`, status);
+        });
+
+      return channel;
+    };
+
+    // Carregar conteúdo inicial e configurar canal
+    loadInitialContent();
+    const channel = setupRealtimeChannel();
+
+    // Atualizar título da página
     document.title = `Tela ${screenId}`;
+
+    // Cleanup
+    return () => {
+      console.log('Cleaning up subscription');
+      supabase.removeChannel(channel);
+    };
   }, [screenId]);
 
+  // Loading state
   if (!content) {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-black">
@@ -57,6 +72,7 @@ const Display = () => {
     );
   }
 
+  // Estilos para o conteúdo
   const contentStyle = {
     transform: `rotate(${content.rotation || 0}deg) scale(${content.scale || 1})`,
     transition: 'transform 0.3s ease-in-out',
@@ -69,6 +85,7 @@ const Display = () => {
     >
       {content.type === "video" ? (
         <video
+          key={content.url} // Força o recarregamento do vídeo quando a URL muda
           src={content.url}
           className="w-full h-full object-contain"
           style={contentStyle}
@@ -80,6 +97,7 @@ const Display = () => {
         />
       ) : (
         <img 
+          key={content.url} // Força o recarregamento da imagem quando a URL muda
           src={content.url} 
           alt={content.title} 
           className="w-full h-full object-contain"
