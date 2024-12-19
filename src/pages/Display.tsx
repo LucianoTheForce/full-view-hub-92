@@ -22,55 +22,94 @@ const Display = () => {
   const { screenId } = useParams();
   const [content, setContent] = useState<ScreenContent | null>(() => {
     try {
-      const savedScreens = localStorage.getItem('screens');
-      console.log('Saved screens from localStorage:', savedScreens);
+      // Tentar carregar do localStorage
+      const savedScreens = window.localStorage.getItem('screens');
+      console.log('Tentando carregar do localStorage:', { savedScreens, screenId });
       
       if (!savedScreens) {
-        console.log('No screens found in localStorage');
+        console.log('Nenhuma tela encontrada no localStorage');
         return null;
       }
 
-      const screens = JSON.parse(savedScreens) as Screen[];
-      console.log('Parsed screens:', screens);
-      console.log('Looking for screen with ID:', screenId);
-      
+      let screens: Screen[];
+      try {
+        screens = JSON.parse(savedScreens);
+        console.log('Telas parseadas:', screens);
+      } catch (parseError) {
+        console.error('Erro ao fazer parse das telas:', parseError);
+        return null;
+      }
+
+      if (!Array.isArray(screens)) {
+        console.error('Dados inválidos no localStorage - não é um array');
+        return null;
+      }
+
       const currentScreen = screens.find(s => String(s.id) === String(screenId));
-      console.log('Found screen:', currentScreen);
-      
-      if (!currentScreen?.currentContent) {
-        console.log('No content found for screen');
+      console.log('Tela encontrada:', currentScreen);
+
+      if (!currentScreen) {
+        console.log(`Nenhuma tela encontrada com ID ${screenId}`);
         return null;
       }
 
-      console.log('Returning content:', currentScreen.currentContent);
+      if (!currentScreen.currentContent) {
+        console.log('Tela encontrada mas sem conteúdo');
+        return null;
+      }
+
+      console.log('Conteúdo encontrado:', currentScreen.currentContent);
       return currentScreen.currentContent;
     } catch (error) {
-      console.error('Error loading initial content:', error);
+      console.error('Erro ao carregar conteúdo inicial:', error);
       return null;
     }
   });
 
   useEffect(() => {
-    console.log('Setting up realtime channel for screen:', screenId);
+    console.log('Configurando canal em tempo real para tela:', screenId);
+    
     const channel = supabase.channel(`screen_${screenId}`)
       .on('broadcast', { event: 'content_update' }, (payload) => {
-        console.log('Received broadcast update:', payload);
+        console.log('Recebido broadcast:', payload);
         if (payload.payload?.screenId === screenId && payload.payload?.content) {
-          console.log('Updating content from broadcast:', payload.payload.content);
+          console.log('Atualizando conteúdo do broadcast:', payload.payload.content);
           setContent(payload.payload.content);
         }
       })
       .subscribe((status) => {
-        console.log(`Subscription status for screen ${screenId}:`, status);
+        console.log(`Status da inscrição para tela ${screenId}:`, status);
       });
+
+    // Tentar recarregar do localStorage periodicamente se não houver conteúdo
+    let retryInterval: number | null = null;
+    if (!content) {
+      retryInterval = window.setInterval(() => {
+        const savedScreens = window.localStorage.getItem('screens');
+        if (savedScreens) {
+          try {
+            const screens = JSON.parse(savedScreens);
+            const currentScreen = screens.find(s => String(s.id) === String(screenId));
+            if (currentScreen?.currentContent) {
+              console.log('Conteúdo encontrado em retry:', currentScreen.currentContent);
+              setContent(currentScreen.currentContent);
+              if (retryInterval) window.clearInterval(retryInterval);
+            }
+          } catch (error) {
+            console.error('Erro ao tentar recarregar:', error);
+          }
+        }
+      }, 1000);
+    }
 
     document.title = `Tela ${screenId}`;
 
     return () => {
-      console.log('Cleaning up subscription');
+      console.log('Limpando recursos...');
       supabase.removeChannel(channel);
+      if (retryInterval) window.clearInterval(retryInterval);
     };
-  }, [screenId]);
+  }, [screenId, content]);
 
   if (!content) {
     return (
