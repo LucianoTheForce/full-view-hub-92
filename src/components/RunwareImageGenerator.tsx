@@ -43,6 +43,11 @@ export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
       return;
     }
 
+    // Se o slideshow estiver habilitado, ajustar o número de resultados com base nas telas ativas
+    if (slideshowEnabled && activeScreens.length > 0) {
+      setNumberResults(activeScreens.length * 2); // Gerar 2 imagens por tela ativa
+    }
+
     setIsGenerating(true);
 
     try {
