@@ -21,12 +21,29 @@ interface Screen {
 const Display = () => {
   const { screenId } = useParams();
   const [content, setContent] = useState<ScreenContent | null>(() => {
-    // Initialize content from localStorage during state initialization
     try {
-      const screens = JSON.parse(localStorage.getItem('screens') || '[]') as Screen[];
-      const currentScreen = screens.find(s => s.id === screenId);
-      console.log('Initial load - Found screen:', currentScreen);
-      return currentScreen?.currentContent || null;
+      const savedScreens = localStorage.getItem('screens');
+      console.log('Saved screens from localStorage:', savedScreens);
+      
+      if (!savedScreens) {
+        console.log('No screens found in localStorage');
+        return null;
+      }
+
+      const screens = JSON.parse(savedScreens) as Screen[];
+      console.log('Parsed screens:', screens);
+      console.log('Looking for screen with ID:', screenId);
+      
+      const currentScreen = screens.find(s => String(s.id) === String(screenId));
+      console.log('Found screen:', currentScreen);
+      
+      if (!currentScreen?.currentContent) {
+        console.log('No content found for screen');
+        return null;
+      }
+
+      console.log('Returning content:', currentScreen.currentContent);
+      return currentScreen.currentContent;
     } catch (error) {
       console.error('Error loading initial content:', error);
       return null;
@@ -34,7 +51,6 @@ const Display = () => {
   });
 
   useEffect(() => {
-    // Setup realtime channel for updates
     console.log('Setting up realtime channel for screen:', screenId);
     const channel = supabase.channel(`screen_${screenId}`)
       .on('broadcast', { event: 'content_update' }, (payload) => {
@@ -48,17 +64,14 @@ const Display = () => {
         console.log(`Subscription status for screen ${screenId}:`, status);
       });
 
-    // Update page title
     document.title = `Tela ${screenId}`;
 
-    // Cleanup subscription
     return () => {
       console.log('Cleaning up subscription');
       supabase.removeChannel(channel);
     };
   }, [screenId]);
 
-  // Loading state
   if (!content) {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-black">
@@ -67,7 +80,6 @@ const Display = () => {
     );
   }
 
-  // Content styles
   const contentStyle = {
     transform: `rotate(${content.rotation || 0}deg) scale(${content.scale || 1})`,
     transition: 'transform 0.3s ease-in-out',
