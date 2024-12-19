@@ -14,6 +14,7 @@ interface RunwareImageGeneratorProps {
   onImageSaved?: () => void;
   slideshowEnabled?: boolean;
   slideshowInterval?: number;
+  activeScreens?: { id: string }[];
 }
 
 export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
@@ -21,6 +22,7 @@ export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
   onImageSaved,
   slideshowEnabled = false,
   slideshowInterval = 5000,
+  activeScreens = [],
 }) => {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -76,40 +78,52 @@ export const RunwareImageGenerator: React.FC<RunwareImageGeneratorProps> = ({
       setGeneratedImages(result);
       
       // Handle slideshow generation if enabled
-      if (slideshowEnabled) {
-        for (const image of result) {
-          if (image.imageURL) {
-            // Save image with slideshow flag
-            const response = await fetch(image.imageURL);
-            const blob = await response.blob();
-            const file = new File([blob], `ai-image-${Date.now()}.webp`, { type: 'image/webp' });
-            
-            const filePath = `ai-generated/${file.name}`;
-            const { error: uploadError } = await supabase.storage
-              .from('media')
-              .upload(filePath, file);
+      if (slideshowEnabled && activeScreens.length > 0) {
+        // Distribuir as imagens entre as telas ativas
+        const imagesPerScreen = Math.ceil(result.length / activeScreens.length);
+        let currentImageIndex = 0;
 
-            if (uploadError) throw uploadError;
+        for (const screen of activeScreens) {
+          const screenImages = result.slice(
+            currentImageIndex,
+            currentImageIndex + imagesPerScreen
+          );
+          
+          for (const image of screenImages) {
+            if (image.imageURL) {
+              // Salvar imagem com flag de slideshow
+              const response = await fetch(image.imageURL);
+              const blob = await response.blob();
+              const file = new File([blob], `ai-image-${Date.now()}.webp`, { type: 'image/webp' });
+              
+              const filePath = `ai-generated/${file.name}`;
+              const { error: uploadError } = await supabase.storage
+                .from('media')
+                .upload(filePath, file);
 
-            const { error: insertError } = await supabase
-              .from('media_items')
-              .insert({
-                title: "Imagem Gerada por IA (Slideshow)",
-                type: "image",
-                file_path: filePath,
-                file_size: file.size,
-                is_slideshow: true,
-              });
+              if (uploadError) throw uploadError;
 
-            if (insertError) throw insertError;
+              const { error: insertError } = await supabase
+                .from('media_items')
+                .insert({
+                  title: "Imagem Gerada por IA (Slideshow)",
+                  type: "image",
+                  file_path: filePath,
+                  file_size: file.size,
+                  is_slideshow: true,
+                });
+
+              if (insertError) throw insertError;
+            }
           }
+          currentImageIndex += imagesPerScreen;
         }
         
         if (onImageSaved) {
           onImageSaved();
         }
         
-        toast.success(`${result.length} imagens geradas e salvas para slideshow!`);
+        toast.success(`${result.length} imagens geradas e distribuídas entre ${activeScreens.length} telas!`);
       } else {
         result.forEach((image: GeneratedImage) => {
           if (image.imageURL) {
